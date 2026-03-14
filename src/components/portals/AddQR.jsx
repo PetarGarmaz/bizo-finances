@@ -9,6 +9,7 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 	const [mounted, setMounted] = useState(false);
 	const [error, setError] = useState("");
 	const [scannedData, setScannedData] = useState("");
+	const [extractedAmount, setExtractedAmount] = useState(null);
 	const videoRef = useRef(null);
 	const scannerRef = useRef(null);
 
@@ -24,12 +25,29 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 		const video = videoRef.current;
 		setError("");
 		setScannedData("");
+		setExtractedAmount(null);
 
 		scannerRef.current = new QrScanner(
 			video,
 			result => {
 				console.log("decoded qr code:", result.data);
-				setScannedData(result.data);
+				const qrData = result.data;
+				setScannedData(qrData);
+
+				// Parse Croatian tax receipt
+				if (qrData.includes('porezna.gov.hr')) {
+					try {
+						const url = new URL(qrData);
+						const iznParam = url.searchParams.get('izn');
+						if (iznParam) {
+							const amount = parseFloat(iznParam.replace(',', '.'));
+							console.log("Extracted amount:", amount);
+							setExtractedAmount(amount);
+						}
+					} catch (e) {
+						console.error("Failed to parse QR link:", e);
+					}
+				}
 			},
 			{
 				returnDetailedScanResult: true,
@@ -86,9 +104,17 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 								)}
 							</div>
 							{scannedData ? (
-								<div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
-									<p className="text-green-400 text-sm font-medium">Scanned:</p>
-									<p className="text-white text-sm mt-1 break-all">{scannedData}</p>
+								<div className="mt-4 space-y-3">
+									{extractedAmount !== null && (
+										<div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+											<p className="text-green-400 text-sm font-medium">Amount Detected:</p>
+											<p className="text-white text-2xl font-bold mt-1">{extractedAmount.toFixed(2)} €</p>
+										</div>
+									)}
+									<div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+										<p className="text-blue-400 text-sm font-medium">Scanned Data:</p>
+										<p className="text-gray-300 text-xs mt-1 break-all">{scannedData}</p>
+									</div>
 								</div>
 							) : (
 								<p className="mt-4 text-center text-sm text-gray-400">Position the QR code within the frame</p>
