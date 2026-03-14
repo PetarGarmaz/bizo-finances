@@ -11,15 +11,35 @@ const Dashboard = () => {
 	    return newNum;
 	}
 
-	return (
-		<main className="flex w-full flex-col items-center p-5 ">
-			{/* EXPENSES */}
-			<section className='flex flex-col py-20 text-center gap-3'>
-				<div className='text-2xl py-1'>Total expenses</div>
-				<div className='text-5xl py-1 font-bold'>{formatNumber(expenses)} €</div>
-				<div className='text-lg py-1 px-4 border rounded-full'>Remaining budget: {formatNumber(budget - expenses)} €</div>
-			</section>
+	const percentage = budget > 0 ? ((budget - expenses) / budget) * 100 : 0;
 
+	return (
+		<main className="flex w-full flex-col items-center px-5 py-12">
+			<section className='flex flex-col w-full max-w-md text-center gap-6'>
+				<div className='flex flex-col gap-2'>
+					<div className='text-sm uppercase tracking-wider text-gray-400 font-semibold'>Total Expenses</div>
+					<div className='text-6xl font-bold bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent'>
+						{formatNumber(expenses)} €
+					</div>
+				</div>
+
+				<div className='relative w-full h-2 bg-gray-800 rounded-full overflow-hidden shadow-inner'>
+					<div
+						className='absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500 shadow-lg'
+						style={{ width: `${Math.min(percentage, 100)}%` }}
+					/>
+				</div>
+
+				<div className='flex flex-col gap-3 p-6 bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 shadow-xl'>
+					<div className='text-xs uppercase tracking-wider text-gray-400 font-semibold'>Remaining Budget</div>
+					<div className='text-3xl font-bold text-gray-100'>
+						{formatNumber(budget - expenses)} €
+					</div>
+					<div className='text-sm text-gray-400'>
+						{percentage.toFixed(1)}% of budget remaining
+					</div>
+				</div>
+			</section>
 		</main>
 	)
 }
