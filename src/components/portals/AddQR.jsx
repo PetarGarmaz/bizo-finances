@@ -3,10 +3,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import QrScanner from 'qr-scanner';
-import { X } from 'lucide-react';
+import { X, Camera } from 'lucide-react';
 
 const AddQR = ({openDialog, setOpenDialog}) => {
 	const [mounted, setMounted] = useState(false);
+	const [error, setError] = useState("");
+	const [scannedData, setScannedData] = useState("");
 	const videoRef = useRef(null);
 	const scannerRef = useRef(null);
 
@@ -16,26 +18,35 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 
 	useEffect(() => {
 		if (!mounted) return;
-		if (!openDialog) return;
+		if (openDialog !== "QR") return;
 		if (!videoRef.current) return;
 
 		const video = videoRef.current;
+		setError("");
+		setScannedData("");
 
 		scannerRef.current = new QrScanner(
-		video,
-		result => {
-			console.log("decoded qr code:", result.data);
-		},
-		{ returnDetailedScanResult: true },
-		{preferredCamera: "environment"}
+			video,
+			result => {
+				console.log("decoded qr code:", result.data);
+				setScannedData(result.data);
+			},
+			{
+				returnDetailedScanResult: true,
+				highlightScanRegion: true,
+				highlightCodeOutline: true,
+			}
 		);
 
-		scannerRef.current.start();
+		scannerRef.current.start().catch(err => {
+			console.error("Scanner error:", err);
+			setError("Camera access denied or unavailable");
+		});
 
 		return () => {
-		scannerRef.current?.stop();
-		scannerRef.current?.destroy();
-		scannerRef.current = null;
+			scannerRef.current?.stop();
+			scannerRef.current?.destroy();
+			scannerRef.current = null;
 		};
 	}, [openDialog, mounted]);
 
@@ -58,13 +69,30 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 						</div>
 
 						<div className="p-6">
-							<div className="relative rounded-xl overflow-hidden bg-black/50 border-2 border-blue-500/30 shadow-lg">
-								<video ref={videoRef} muted playsInline className="w-full aspect-square object-cover" />
-								<div className="absolute inset-0 pointer-events-none">
-									<div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-2 border-blue-500 rounded-lg shadow-lg shadow-blue-500/50"></div>
-								</div>
+							<div className="relative rounded-xl overflow-hidden bg-black border-2 border-blue-500/30 shadow-lg">
+								{error ? (
+									<div className="w-full aspect-square flex flex-col items-center justify-center gap-4 p-8">
+										<Camera className="w-16 h-16 text-red-400" />
+										<p className="text-red-400 text-center font-medium">{error}</p>
+										<p className="text-gray-400 text-sm text-center">Please allow camera access in your browser settings</p>
+									</div>
+								) : (
+									<>
+										<video ref={videoRef} muted playsInline autoPlay className="w-full aspect-square object-cover" />
+										<div className="absolute inset-0 pointer-events-none">
+											<div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border-2 border-blue-500 rounded-lg shadow-lg shadow-blue-500/50"></div>
+										</div>
+									</>
+								)}
 							</div>
-							<p className="mt-4 text-center text-sm text-gray-400">Position the QR code within the frame</p>
+							{scannedData ? (
+								<div className="mt-4 p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+									<p className="text-green-400 text-sm font-medium">Scanned:</p>
+									<p className="text-white text-sm mt-1 break-all">{scannedData}</p>
+								</div>
+							) : (
+								<p className="mt-4 text-center text-sm text-gray-400">Position the QR code within the frame</p>
+							)}
 						</div>
 					</div>
 
