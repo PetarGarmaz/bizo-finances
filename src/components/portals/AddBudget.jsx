@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Plus } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { addBudget } from '@/lib/localStorage';
 
 const AddBudget = ({ openDialog, setOpenDialog }) => {
 	const [mounted, setMounted] = useState(false);
@@ -27,7 +27,7 @@ const AddBudget = ({ openDialog, setOpenDialog }) => {
 		}
 	}, [openDialog]);
 
-	const handleSubmit = async (e) => {
+	const handleSubmit = (e) => {
 		e.preventDefault();
 		setError('');
 
@@ -39,16 +39,12 @@ const AddBudget = ({ openDialog, setOpenDialog }) => {
 
 		setSaving(true);
 		try {
-			const { error } = await supabase
-				.from('budgets')
-				.insert({
-					amount: numAmount,
-					source_name: sourceName || null,
-					updated_at: new Date().toISOString()
-				});
+			addBudget({
+				amount: numAmount,
+				source_name: sourceName || 'Manual',
+			});
 
-			if (error) throw error;
-
+			window.dispatchEvent(new Event('localStorageUpdate'));
 			setOpenDialog('');
 		} catch (error) {
 			console.error('Error saving budget:', error);

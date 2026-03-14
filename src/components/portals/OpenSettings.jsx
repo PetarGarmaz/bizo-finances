@@ -2,8 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, Trash2, TriangleAlert as AlertTriangle, Database } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { X, Trash2, TriangleAlert as AlertTriangle, Database, Download, Upload } from 'lucide-react';
+import { getExpenses, getBudgets, clearAllData, exportToJSON, importFromJSON } from '@/lib/localStorage';
 
 const OpenSettings = ({ openDialog, setOpenDialog }) => {
 	const [mounted, setMounted] = useState(false);
@@ -21,17 +21,15 @@ const OpenSettings = ({ openDialog, setOpenDialog }) => {
 		}
 	}, [openDialog]);
 
-	const loadStats = async () => {
+	const loadStats = () => {
 		setLoading(true);
 		try {
-			const [expensesResult, budgetsResult] = await Promise.all([
-				supabase.from('expenses').select('id', { count: 'exact', head: true }),
-				supabase.from('budgets').select('id', { count: 'exact', head: true })
-			]);
+			const expenses = getExpenses();
+			const budgets = getBudgets();
 
 			setStats({
-				expenses: expensesResult.count || 0,
-				budgets: budgetsResult.count || 0
+				expenses: expenses.length,
+				budgets: budgets.length
 			});
 		} catch (error) {
 			console.error('Error loading stats:', error);
@@ -40,52 +38,88 @@ const OpenSettings = ({ openDialog, setOpenDialog }) => {
 		}
 	};
 
-	const handleClearExpenses = async () => {
+	const handleClearExpenses = () => {
 		try {
-			const { error } = await supabase
-				.from('expenses')
-				.delete()
-				.neq('id', '00000000-0000-0000-0000-000000000000');
-
-			if (error) throw error;
-
+			localStorage.removeItem('bizo_expenses');
+			localStorage.setItem('bizo_expenses', JSON.stringify([]));
 			setShowConfirm(null);
 			loadStats();
+			window.dispatchEvent(new Event('localStorageUpdate'));
 		} catch (error) {
 			console.error('Error clearing expenses:', error);
 			alert('Failed to clear expenses');
 		}
 	};
 
-	const handleClearBudgets = async () => {
+	const handleClearBudgets = () => {
 		try {
-			const { error } = await supabase
-				.from('budgets')
-				.delete()
-				.neq('id', '00000000-0000-0000-0000-000000000000');
-
-			if (error) throw error;
-
+			localStorage.removeItem('bizo_budgets');
+			localStorage.setItem('bizo_budgets', JSON.stringify([]));
 			setShowConfirm(null);
 			loadStats();
+			window.dispatchEvent(new Event('localStorageUpdate'));
 		} catch (error) {
 			console.error('Error clearing budgets:', error);
 			alert('Failed to clear budgets');
 		}
 	};
 
-	const handleClearAll = async () => {
+	const handleClearAll = () => {
 		try {
-			await Promise.all([
-				supabase.from('expenses').delete().neq('id', '00000000-0000-0000-0000-000000000000'),
-				supabase.from('budgets').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-			]);
-
+			clearAllData();
 			setShowConfirm(null);
 			loadStats();
+			window.dispatchEvent(new Event('localStorageUpdate'));
 		} catch (error) {
 			console.error('Error clearing all data:', error);
 			alert('Failed to clear data');
+		}
+	};
+
+	const handleExport = () => {
+		try {
+			const jsonData = exportToJSON();
+			const blob = new Blob([jsonData], { type: 'application/json' });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `bizo-finances-${new Date().toISOString().split('T')[0]}.json`;
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			URL.revokeObjectURL(url);
+		} catch (error) {
+			console.error('Error exporting data:', error);
+			alert('Failed to export data');
+		}
+	};
+
+	const handleImport = () => {
+		try {
+			const input = document.createElement('input');
+			input.type = 'file';
+			input.accept = 'application/json';
+			input.onchange = (e) => {
+				const file = e.target.files[0];
+				if (file) {
+					const reader = new FileReader();
+					reader.onload = (event) => {
+						const success = importFromJSON(event.target.result);
+						if (success) {
+							loadStats();
+							window.dispatchEvent(new Event('localStorageUpdate'));
+							alert('Data imported successfully!');
+						} else {
+							alert('Failed to import data');
+						}
+					};
+					reader.readAsText(file);
+				}
+			};
+			input.click();
+		} catch (error) {
+			console.error('Error importing data:', error);
+			alert('Failed to import data');
 		}
 	};
 
@@ -124,6 +158,29 @@ const OpenSettings = ({ openDialog, setOpenDialog }) => {
 										<p className="text-xs text-gray-400 mb-1">Budgets</p>
 										<p className="text-2xl font-bold text-white">{stats.budgets}</p>
 									</div>
+								</div>
+							</div>
+
+							<div className="border-t border-gray-700/50 pt-6">
+								<h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3">
+									Data Management
+								</h3>
+								<div className="space-y-3">
+									<button
+										onClick={handleExport}
+										className="w-full px-4 py-3 bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-lg font-medium transition-all duration-300 hover:bg-blue-500/20 active:scale-95 flex items-center justify-center gap-2"
+									>
+										<Download className="w-4 h-4" />
+										Export Data to JSON
+									</button>
+
+									<button
+										onClick={handleImport}
+										className="w-full px-4 py-3 bg-green-500/10 border border-green-500/30 text-green-400 rounded-lg font-medium transition-all duration-300 hover:bg-green-500/20 active:scale-95 flex items-center justify-center gap-2"
+									>
+										<Upload className="w-4 h-4" />
+										Import Data from JSON
+									</button>
 								</div>
 							</div>
 

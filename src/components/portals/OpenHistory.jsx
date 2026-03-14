@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Trash2, Receipt, Calendar } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { getExpenses, deleteExpense } from '@/lib/localStorage';
 
 const OpenHistory = ({ openDialog, setOpenDialog }) => {
 	const [mounted, setMounted] = useState(false);
@@ -21,17 +21,13 @@ const OpenHistory = ({ openDialog, setOpenDialog }) => {
 		}
 	}, [openDialog]);
 
-	const loadHistory = async () => {
+	const loadHistory = () => {
 		setLoading(true);
 		setError('');
 		try {
-			const { data, error } = await supabase
-				.from('expenses')
-				.select('*')
-				.order('created_at', { ascending: false });
-
-			if (error) throw error;
-			setExpenses(data || []);
+			const data = getExpenses();
+			const sorted = data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+			setExpenses(sorted);
 		} catch (error) {
 			console.error('Error loading history:', error);
 			setError('Failed to load history');
@@ -40,18 +36,13 @@ const OpenHistory = ({ openDialog, setOpenDialog }) => {
 		}
 	};
 
-	const handleDelete = async (id) => {
+	const handleDelete = (id) => {
 		if (!confirm('Are you sure you want to delete this expense?')) return;
 
 		try {
-			const { error } = await supabase
-				.from('expenses')
-				.delete()
-				.eq('id', id);
-
-			if (error) throw error;
-
+			deleteExpense(id);
 			setExpenses(expenses.filter(exp => exp.id !== id));
+			window.dispatchEvent(new Event('localStorageUpdate'));
 		} catch (error) {
 			console.error('Error deleting expense:', error);
 			setError('Failed to delete expense');

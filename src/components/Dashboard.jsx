@@ -1,7 +1,7 @@
 "use client"
 
 import {useState, useEffect} from 'react'
-import { supabase } from '@/lib/supabase'
+import { getTotalExpenses, getCurrentBudget } from '@/lib/localStorage'
 
 const Dashboard = () => {
 	const [expenses, setExpenses] = useState(0);
@@ -11,64 +11,35 @@ const Dashboard = () => {
 	useEffect(() => {
 		loadData();
 
-		const channel = supabase
-			.channel('dashboard-db-changes')
-			.on(
-				'postgres_changes',
-				{ event: '*', schema: 'public', table: 'expenses' },
-				(payload) => {
-					console.log('Expenses change received:', payload);
-					loadData();
-				}
-			)
-			.on(
-				'postgres_changes',
-				{ event: '*', schema: 'public', table: 'budgets' },
-				(payload) => {
-					console.log('Budgets change received:', payload);
-					loadData();
-				}
-			)
-			.subscribe((status) => {
-				console.log('Subscription status:', status);
-			});
+		// Listen for storage changes from other tabs/windows
+		const handleStorageChange = (e) => {
+			if (e.key === 'bizo_expenses' || e.key === 'bizo_budgets') {
+				loadData();
+			}
+		};
+
+		window.addEventListener('storage', handleStorageChange);
+
+		// Custom event for same-tab updates
+		const handleLocalUpdate = () => {
+			loadData();
+		};
+
+		window.addEventListener('localStorageUpdate', handleLocalUpdate);
 
 		return () => {
-			supabase.removeChannel(channel);
+			window.removeEventListener('storage', handleStorageChange);
+			window.removeEventListener('localStorageUpdate', handleLocalUpdate);
 		};
 	}, []);
 
-	const loadData = async () => {
+	const loadData = () => {
 		try {
-			const { data: expensesData, error: expensesError } = await supabase
-				.from('expenses')
-				.select('amount');
-
-			if (expensesError) throw expensesError;
-
-			const totalExpenses = expensesData?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
+			const totalExpenses = getTotalExpenses();
 			setExpenses(totalExpenses);
 
-			const { data: budgetData, error: budgetError } = await supabase
-				.from('budgets')
-				.select('amount')
-				.order('updated_at', { ascending: false })
-				.limit(1)
-				.maybeSingle();
-
-			if (budgetError) throw budgetError;
-
-			if (budgetData) {
-				setBudget(Number(budgetData.amount));
-			} else {
-				const { error: insertError } = await supabase
-					.from('budgets')
-					.insert({ amount: 1000 });
-
-				if (!insertError) {
-					setBudget(1000);
-				}
-			}
+			const currentBudget = getCurrentBudget();
+			setBudget(Number(currentBudget.amount));
 		} catch (error) {
 			console.error('Error loading data:', error);
 		} finally {

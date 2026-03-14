@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import QrScanner from 'qr-scanner';
 import { X, Camera, Check, ScanLine } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { addExpense } from '@/lib/localStorage';
 
 const AddQR = ({openDialog, setOpenDialog}) => {
 	const [mounted, setMounted] = useState(false);
@@ -117,7 +117,7 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 		}
 	}, [openDialog]);
 
-	const handleSubmit = async (e) => {
+	const handleSubmit = (e) => {
 		e.preventDefault();
 		setError('');
 
@@ -129,18 +129,12 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 
 		setSaving(true);
 		try {
-			const { error } = await supabase
-				.from('expenses')
-				.insert({
-					amount: numAmount,
-					source_name: sourceName || null,
-					description: description || '',
-					source: 'qr_scan',
-					receipt_url: scannedData
-				});
+			addExpense({
+				amount: numAmount,
+				source_name: sourceName || 'QR Scan',
+			});
 
-			if (error) throw error;
-
+			window.dispatchEvent(new Event('localStorageUpdate'));
 			setOpenDialog('');
 			setShowForm(false);
 		} catch (error) {
