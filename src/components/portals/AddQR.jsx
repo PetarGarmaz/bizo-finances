@@ -20,34 +20,6 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 		setMounted(true);
 	}, []);
 
-	const saveExpense = async (amount, receiptUrl) => {
-		setSaving(true);
-		try {
-			const { error } = await supabase
-				.from('expenses')
-				.insert({
-					amount: amount,
-					description: 'QR scanned receipt',
-					source: 'qr_scan',
-					receipt_url: receiptUrl
-				});
-
-			if (error) throw error;
-
-			setSaved(true);
-
-			setTimeout(() => {
-				scannerRef.current?.stop();
-				setOpenDialog("");
-			}, 2000);
-
-		} catch (error) {
-			console.error('Error saving expense:', error);
-			setError('Failed to save expense');
-		} finally {
-			setSaving(false);
-		}
-	};
 
 	useEffect(() => {
 		if (!mounted) return;
@@ -61,27 +33,56 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 		setSaving(false);
 		setSaved(false);
 
+		const handleScan = async (qrData) => {
+			setScannedData(qrData);
+
+			if (qrData.includes('porezna.gov.hr')) {
+				try {
+					const url = new URL(qrData);
+					const iznParam = url.searchParams.get('izn');
+					if (iznParam) {
+						const amount = parseFloat(iznParam.replace(',', '.'));
+						console.log("Extracted amount:", amount);
+						setExtractedAmount(amount);
+
+						setSaving(true);
+						try {
+							const { error } = await supabase
+								.from('expenses')
+								.insert({
+									amount: amount,
+									description: 'QR scanned receipt',
+									source: 'qr_scan',
+									receipt_url: qrData
+								});
+
+							if (error) throw error;
+
+							setSaved(true);
+
+							setTimeout(() => {
+								scannerRef.current?.stop();
+								setOpenDialog("");
+							}, 2000);
+
+						} catch (error) {
+							console.error('Error saving expense:', error);
+							setError('Failed to save expense');
+						} finally {
+							setSaving(false);
+						}
+					}
+				} catch (e) {
+					console.error("Failed to parse QR link:", e);
+				}
+			}
+		};
+
 		scannerRef.current = new QrScanner(
 			video,
 			result => {
 				console.log("decoded qr code:", result.data);
-				const qrData = result.data;
-				setScannedData(qrData);
-
-				if (qrData.includes('porezna.gov.hr')) {
-					try {
-						const url = new URL(qrData);
-						const iznParam = url.searchParams.get('izn');
-						if (iznParam) {
-							const amount = parseFloat(iznParam.replace(',', '.'));
-							console.log("Extracted amount:", amount);
-							setExtractedAmount(amount);
-							saveExpense(amount, qrData);
-						}
-					} catch (e) {
-						console.error("Failed to parse QR link:", e);
-					}
-				}
+				handleScan(result.data);
 			},
 			{
 				returnDetailedScanResult: true,
@@ -100,7 +101,7 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 			scannerRef.current?.destroy();
 			scannerRef.current = null;
 		};
-	}, [openDialog, mounted]);
+	}, [openDialog, mounted, setOpenDialog]);
 
 	return (
 		<div>
