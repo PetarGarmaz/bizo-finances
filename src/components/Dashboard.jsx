@@ -12,18 +12,22 @@ const Dashboard = () => {
 		loadData();
 
 		const expensesSubscription = supabase
-			.channel('expenses-changes')
-			.on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, loadData)
+			.channel('dashboard-expenses-changes')
+			.on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => {
+				loadData();
+			})
 			.subscribe();
 
 		const budgetsSubscription = supabase
-			.channel('budgets-changes')
-			.on('postgres_changes', { event: '*', schema: 'public', table: 'budgets' }, loadData)
+			.channel('dashboard-budgets-changes')
+			.on('postgres_changes', { event: '*', schema: 'public', table: 'budgets' }, () => {
+				loadData();
+			})
 			.subscribe();
 
 		return () => {
-			expensesSubscription.unsubscribe();
-			budgetsSubscription.unsubscribe();
+			supabase.removeChannel(expensesSubscription);
+			supabase.removeChannel(budgetsSubscription);
 		};
 	}, []);
 
