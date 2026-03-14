@@ -3,19 +3,51 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import QrScanner from 'qr-scanner';
-import { X, Camera } from 'lucide-react';
+import { X, Camera, Check } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 const AddQR = ({openDialog, setOpenDialog}) => {
 	const [mounted, setMounted] = useState(false);
 	const [error, setError] = useState("");
 	const [scannedData, setScannedData] = useState("");
 	const [extractedAmount, setExtractedAmount] = useState(null);
+	const [saving, setSaving] = useState(false);
+	const [saved, setSaved] = useState(false);
 	const videoRef = useRef(null);
 	const scannerRef = useRef(null);
 
 	useEffect(() => {
 		setMounted(true);
 	}, []);
+
+	const saveExpense = async (amount, receiptUrl) => {
+		setSaving(true);
+		try {
+			const { error } = await supabase
+				.from('expenses')
+				.insert({
+					amount: amount,
+					description: 'QR scanned receipt',
+					source: 'qr_scan',
+					receipt_url: receiptUrl
+				});
+
+			if (error) throw error;
+
+			setSaved(true);
+
+			setTimeout(() => {
+				scannerRef.current?.stop();
+				setOpenDialog("");
+			}, 2000);
+
+		} catch (error) {
+			console.error('Error saving expense:', error);
+			setError('Failed to save expense');
+		} finally {
+			setSaving(false);
+		}
+	};
 
 	useEffect(() => {
 		if (!mounted) return;
@@ -26,6 +58,8 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 		setError("");
 		setScannedData("");
 		setExtractedAmount(null);
+		setSaving(false);
+		setSaved(false);
 
 		scannerRef.current = new QrScanner(
 			video,
@@ -34,7 +68,6 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 				const qrData = result.data;
 				setScannedData(qrData);
 
-				// Parse Croatian tax receipt
 				if (qrData.includes('porezna.gov.hr')) {
 					try {
 						const url = new URL(qrData);
@@ -43,6 +76,7 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 							const amount = parseFloat(iznParam.replace(',', '.'));
 							console.log("Extracted amount:", amount);
 							setExtractedAmount(amount);
+							saveExpense(amount, qrData);
 						}
 					} catch (e) {
 						console.error("Failed to parse QR link:", e);
@@ -109,6 +143,15 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 										<div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
 											<p className="text-green-400 text-sm font-medium">Amount Detected:</p>
 											<p className="text-white text-2xl font-bold mt-1">{extractedAmount.toFixed(2)} €</p>
+											{saved && (
+												<div className="flex items-center gap-2 mt-2 text-green-400">
+													<Check className="w-5 h-5" />
+													<span className="text-sm font-medium">Expense saved!</span>
+												</div>
+											)}
+											{saving && !saved && (
+												<p className="text-sm text-gray-400 mt-2">Saving...</p>
+											)}
 										</div>
 									)}
 									<div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
