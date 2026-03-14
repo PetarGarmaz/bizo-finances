@@ -20,34 +20,6 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 		setMounted(true);
 	}, []);
 
-	const saveExpense = async (amount, receiptUrl) => {
-		setSaving(true);
-		try {
-			const { error } = await supabase
-				.from('expenses')
-				.insert({
-					amount: amount,
-					description: 'QR scanned receipt',
-					source: 'qr_scan',
-					receipt_url: receiptUrl
-				});
-
-			if (error) throw error;
-
-			setSaved(true);
-
-			setTimeout(() => {
-				scannerRef.current?.stop();
-				setOpenDialog("");
-			}, 2000);
-
-		} catch (error) {
-			console.error('Error saving expense:', error);
-			setError('Failed to save expense');
-		} finally {
-			setSaving(false);
-		}
-	};
 
 	useEffect(() => {
 		if (!mounted) return;
@@ -61,46 +33,124 @@ const AddQR = ({openDialog, setOpenDialog}) => {
 		setSaving(false);
 		setSaved(false);
 
-		scannerRef.current = new QrScanner(
+		const handleScan = async (qrData) => {
+			console.log("QR detected! Data:", qrData);
+			setScannedData(qrData);
+
+			// Stop scanning immediately to prevent multiple scans
+			if (scannerRef.current) {
+				scannerRef.current.stop();
+			}
+
+			if (qrData.includes('porezna.gov.hr')) {
+				try {
+					const url = new URL(qrData);
+					const iznParam = url.searchParams.get('izn');
+					if (iznParam) {
+						const amount = parseFloat(iznParam.replace(',', '.'));
+						console.log("Extracted amount:", amount);
+						setExtractedAmount(amount);
+
+						setSaving(true);
+						try {
+							const { error } = await supabase
+								.from('expenses')
+								.insert({
+									amount: amount,
+									description: 'QR scanned receipt',
+									source: 'qr_scan',
+									receipt_url: qrData
+								});
+
+							if (error) throw error;
+
+							setSaved(true);
+
+							// Close portal immediately after saving
+							setTimeout(() => {
+								setOpenDialog("");
+							}, 500);
+
+						} catch (error) {
+							console.error('Error saving expense:', error);
+							setError('Failed to save expense');
+							setSaving(false);
+						}
+					}
+				} catch (e) {
+					console.error("Failed to parse QR link:", e);
+					setError('Invalid QR code format');
+				}
+			} else {
+				// For any QR code, just save it
+				console.log("Non-porezna QR code, attempting to extract amount...");
+
+				// Try to find any number that looks like an amount
+				const amountMatch = qrData.match(/(\d+[.,]\d{2})/);
+				if (amountMatch) {
+					const amount = parseFloat(amountMatch[1].replace(',', '.'));
+					setExtractedAmount(amount);
+
+					setSaving(true);
+					try {
+						const { error } = await supabase
+							.from('expenses')
+							.insert({
+								amount: amount,
+								description: 'QR scanned receipt',
+								source: 'qr_scan',
+								receipt_url: qrData
+							});
+
+						if (error) throw error;
+
+						setSaved(true);
+
+						// Close portal immediately after saving
+						setTimeout(() => {
+							setOpenDialog("");
+						}, 500);
+
+					} catch (error) {
+						console.error('Error saving expense:', error);
+						setError('Failed to save expense');
+						setSaving(false);
+					}
+				} else {
+					setError('No amount found in QR code');
+				}
+			}
+		};
+
+		const qrScanner = new QrScanner(
 			video,
 			result => {
-				console.log("decoded qr code:", result.data);
-				const qrData = result.data;
-				setScannedData(qrData);
-
-				if (qrData.includes('porezna.gov.hr')) {
-					try {
-						const url = new URL(qrData);
-						const iznParam = url.searchParams.get('izn');
-						if (iznParam) {
-							const amount = parseFloat(iznParam.replace(',', '.'));
-							console.log("Extracted amount:", amount);
-							setExtractedAmount(amount);
-							saveExpense(amount, qrData);
-						}
-					} catch (e) {
-						console.error("Failed to parse QR link:", e);
-					}
-				}
+				console.log("QR Scanner callback triggered!");
+				handleScan(result.data);
 			},
 			{
 				returnDetailedScanResult: true,
 				highlightScanRegion: true,
 				highlightCodeOutline: true,
+				maxScansPerSecond: 5,
 			}
 		);
 
-		scannerRef.current.start().catch(err => {
-			console.error("Scanner error:", err);
+		scannerRef.current = qrScanner;
+
+		qrScanner.start().catch(err => {
+			console.error("Scanner start error:", err);
 			setError("Camera access denied or unavailable");
 		});
+
+		console.log("QR Scanner initialized and started");
 
 		return () => {
 			scannerRef.current?.stop();
 			scannerRef.current?.destroy();
 			scannerRef.current = null;
 		};
-	}, [openDialog, mounted]);
+	}, [openDialog, mounted, setOpenDialog]);
 
 	return (
 		<div>
