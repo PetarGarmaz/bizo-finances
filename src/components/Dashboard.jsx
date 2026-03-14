@@ -11,23 +11,30 @@ const Dashboard = () => {
 	useEffect(() => {
 		loadData();
 
-		const expensesSubscription = supabase
-			.channel('dashboard-expenses-changes')
-			.on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, () => {
-				loadData();
-			})
-			.subscribe();
-
-		const budgetsSubscription = supabase
-			.channel('dashboard-budgets-changes')
-			.on('postgres_changes', { event: '*', schema: 'public', table: 'budgets' }, () => {
-				loadData();
-			})
-			.subscribe();
+		const channel = supabase
+			.channel('dashboard-db-changes')
+			.on(
+				'postgres_changes',
+				{ event: '*', schema: 'public', table: 'expenses' },
+				(payload) => {
+					console.log('Expenses change received:', payload);
+					loadData();
+				}
+			)
+			.on(
+				'postgres_changes',
+				{ event: '*', schema: 'public', table: 'budgets' },
+				(payload) => {
+					console.log('Budgets change received:', payload);
+					loadData();
+				}
+			)
+			.subscribe((status) => {
+				console.log('Subscription status:', status);
+			});
 
 		return () => {
-			supabase.removeChannel(expensesSubscription);
-			supabase.removeChannel(budgetsSubscription);
+			supabase.removeChannel(channel);
 		};
 	}, []);
 
